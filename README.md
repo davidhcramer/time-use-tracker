@@ -1,4 +1,4 @@
-# Tenths
+# Week Tracker
 
 One week of your life, tracked the way lawyers bill it: in tenths of an hour.
 
@@ -9,14 +9,17 @@ tracker, and a media-diet overview — per person, with zero accounts.
 
 ## Using it
 
-- **Track** — the day is a tape of 240 six-minute blocks. Tap a block, pick a
-  category (or add one with **+ New**). Use the fill chips (×5, ×10, ×20, → now)
-  to paint longer stretches — "→ now" fills from the tapped block up to the
-  current time, which is the fastest way to log "I've been doing X since 9:00".
-- **Spent money / Media** — the two pill buttons work from any tab. Log the
-  amount + purpose, or the title + type, in a couple of taps. Edit or delete any
-  entry from the Money / Media tabs.
-- **Week** — totals, the week barcode (each day as a colored strip of its 240
+- **Time** — the day is a tape of 240 six-minute blocks. Tap a block, pick a
+  category (or add one with **+ New**). Set the From/To times directly, or use
+  the duration chips (6 min, 30 min, 1 h, 2 h, → now — "→ now" fills up to the
+  current time, the fastest way to log "I've been doing X since 9:00").
+  Tapping an already-logged block selects its whole stretch so you can move or
+  resize it. You can also **press and hold a logged block, then drag** to
+  stretch it across more of the day.
+- **Money / Media** — each tab is its own logging page: punch in the amount +
+  what for, or the title + type + minutes, right at the top. The time defaults
+  to now and can be adjusted. Tap any logged entry below to edit or delete it.
+- **Summary** — totals, the week barcode (each day as a colored strip of its 240
   blocks), hours per category in 0.1h units, spend by purpose, media by type.
   "Copy week summary" puts a text digest on the clipboard for the group chat.
 
