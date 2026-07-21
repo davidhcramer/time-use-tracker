@@ -1139,11 +1139,20 @@ async function syncNow(quiet) {
 }
 
 /* ============================== settings ============================== */
+let installEvt = null;
+window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installEvt = e; });
 function openSettings() {
   const p = S.profile;
   const { id, token } = gistCfg();
   const last = +localStorage.getItem("tenths.gist.last") || 0;
   const snaps = Object.keys(localStorage).filter(x => x.startsWith("tenths.snap.")).sort().reverse();
+  const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+  const installHtml = standalone ? "" :
+    `<div class="fieldlab">Install as an app</div>` + (installEvt
+      ? `<button class="btn-secondary" id="sInstall">Install on this device</button>`
+      : `<div class="hint" style="margin-top:0;">${/iphone|ipad|ipod/i.test(navigator.userAgent)
+          ? "Tap the <b>Share</b> button, then <b>Add to Home Screen</b>."
+          : "In Chrome: menu (⋮) → <b>Add to Home screen</b>."}</div>`);
   openSheet(
     sheetHead("Settings") +
     `<div class="sheet-body">
@@ -1161,6 +1170,8 @@ function openSettings() {
           <input value="${esc(c.name)}" maxlength="24">
           <button class="del">delete</button>
         </div>`).join("")}</div>
+
+      ${installHtml}
 
       <div class="fieldlab">Your data</div>
       <button class="btn-secondary" id="sExport">Export / share (JSON)</button>
@@ -1199,6 +1210,12 @@ function openSettings() {
       S.categories = S.categories.filter(c => c.id !== cat.id);
       save(); openSettings(); renderAll();
     });
+  });
+  const si = $("#sInstall");
+  if (si) si.addEventListener("click", () => {
+    const evt = installEvt; installEvt = null;
+    closeSheet();
+    if (evt) evt.prompt();
   });
   $("#sExport").addEventListener("click", exportData);
   let importMode = "merge";
