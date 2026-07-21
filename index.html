@@ -292,6 +292,7 @@ nav button.active { color: var(--accent); }
 .setrow .lab { font-size: 14px; font-weight: 600; }
 .setrow .lab small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; }
 .setrow input, .setrow select { width: auto; max-width: 170px; }
+details summary.fieldlab { cursor: pointer; list-style-position: outside; }
 .catman { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px dashed var(--hairline); }
 .catman input { flex: 1; padding: 7px 10px; }
 .catman .del { color: var(--danger); font-size: 13px; font-weight: 600; flex: none; }
@@ -828,8 +829,7 @@ function openMediaSheet(e) {
       <div class="chips" id="dChips">${MEDIA_TYPES.map(t =>
         `<button class="chip small ${t === e.type ? "sel" : ""}" data-t="${t}">${t}</button>`).join("")}</div>
       <div class="timerow" style="margin-top:14px;">
-        <label class="tight">When<input type="time" id="dTime" value="${fmtTime(e.ts)}"></label>
-        <label>Minutes<input id="dMin" inputmode="numeric" placeholder="e.g. 25" value="${e.minutes || ""}"></label>
+        <label>When<input type="time" id="dTime" value="${fmtTime(e.ts)}"></label>
       </div>
       <button class="btn-primary" id="dSave">Save</button>
       <button class="btn-danger" id="dDel">Delete entry</button>
@@ -845,11 +845,9 @@ function openMediaSheet(e) {
   q("#dSave").addEventListener("click", () => {
     const title = q("#dTitle").value.trim();
     if (!title) { toast("What did you watch / read / hear?"); return; }
-    const minutes = parseInt(q("#dMin").value);
-    if (!(minutes > 0)) { toast("How many minutes?"); return; }
     const rec = {
       id: e.id, ts: tsWithTime(e.ts, q("#dTime").value), up: Date.now(),
-      title, type: selType || "Other", minutes,
+      title, type: selType || "Other",
     };
     const ix = S.media.findIndex(m => m.id === e.id); S.media[ix] = rec;
     save(); closeSheet(); renderMedia(); renderWeekbar(); toast("Saved");
@@ -862,7 +860,6 @@ function openMediaSheet(e) {
 function renderMedia() {
   const days = weekDates(selDate).map(dateKey);
   const wk = S.media.filter(m => days.includes(dateKey(new Date(m.ts)))).sort((a, b) => b.ts - a.ts);
-  const mins = wk.reduce((a, m) => a + (m.minutes || 0), 0);
   let html = `<section class="card">
     <h2>I just consumed media</h2>
     <input id="dTitle" placeholder="Title (show, video, article, album…)" list="titleList">
@@ -871,14 +868,12 @@ function renderMedia() {
     <div class="chips" id="dChips">${MEDIA_TYPES.map(t =>
       `<button class="chip small" data-t="${t}">${t}</button>`).join("")}</div>
     <div class="timerow" style="margin-top:14px;">
-      <label class="tight">When<input type="time" id="dTime" value="${fmtTime(Date.now())}"></label>
-      <label>Minutes<input id="dMin" inputmode="numeric" placeholder="e.g. 25"></label>
+      <label>When<input type="time" id="dTime" value="${fmtTime(Date.now())}"></label>
     </div>
     <button class="btn-primary" id="dLog">Log it</button>
   </section>`;
   if (wk.length)
-    html += `<div class="totals"><div class="total-tile"><div class="lab">This week</div><div class="val">${wk.length} items</div></div>
-      ${mins ? `<div class="total-tile"><div class="lab">Logged minutes</div><div class="val">${mins}</div></div>` : ""}</div>`;
+    html += `<div class="totals"><div class="total-tile"><div class="lab">This week</div><div class="val">${wk.length} items</div></div></div>`;
   if (!wk.length) html += `<div class="empty-note">No media logged this week.<br>Log it above right after you watch, read, scroll, or listen.</div>`;
   else {
     const byDay = {};
@@ -888,7 +883,7 @@ function renderMedia() {
       html += `<div class="day-group"><h3>${DOW[d.getDay()]} ${d.getDate()} ${MON[d.getMonth()]}</h3>` +
         byDay[k].map(m => `<button class="entry" data-id="${m.id}">
           <span class="when">${fmtTime(m.ts)}</span>
-          <span class="what"><span class="p1">${esc(m.title)}</span><span class="p2">${m.type}${m.minutes ? " · " + m.minutes + " min" : ""}</span></span>
+          <span class="what"><span class="p1">${esc(m.title)}</span><span class="p2">${m.type}</span></span>
         </button>`).join("") + "</div>";
     });
   }
@@ -902,11 +897,9 @@ function renderMedia() {
   $("#dLog").addEventListener("click", () => {
     const title = $("#dTitle").value.trim();
     if (!title) { toast("What did you watch / read / hear?"); return; }
-    const minutes = parseInt($("#dMin").value);
-    if (!(minutes > 0)) { toast("How many minutes?"); return; }
     const rec = {
       id: uid(), ts: tsWithTime(Date.now(), $("#dTime").value), up: Date.now(),
-      title, type: logType || "Other", minutes,
+      title, type: logType || "Other",
     };
     S.media.push(rec);
     save(); renderMedia(); renderWeekbar(); toast("Logged: " + title);
@@ -933,13 +926,12 @@ function renderWeek() {
   const start = fromKey(days[0]), end = fromKey(days[6]);
   const spend = {};
   money.forEach(m => spend[m.currency] = (spend[m.currency] || 0) + m.amount);
-  const mediaMin = media.reduce((a, m) => a + (m.minutes || 0), 0);
   const trackedH = filled * 0.1;
 
   let html = `<div class="tiles">
     <div class="tile"><div class="lab">Tracked</div><div class="val">${trackedH.toFixed(1)}h</div><div class="sub">of 168h · ${Math.round(trackedH / 168 * 100)}%</div></div>
     <div class="tile"><div class="lab">Spent</div><div class="val">${Object.keys(spend).length ? esc(Object.entries(spend).map(([c, v]) => fmtMoney(v, c)).join(" + ")) : "—"}</div><div class="sub">${money.length} purchases</div></div>
-    <div class="tile"><div class="lab">Media</div><div class="val">${media.length}</div><div class="sub">${mediaMin ? mediaMin + " min logged" : "items"}</div></div>
+    <div class="tile"><div class="lab">Media</div><div class="val">${media.length}</div><div class="sub">items</div></div>
   </div>`;
 
   /* barcode */
@@ -1154,8 +1146,6 @@ let installEvt = null;
 window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installEvt = e; });
 function openSettings() {
   const p = S.profile;
-  const { id, token } = gistCfg();
-  const last = +localStorage.getItem("tenths.gist.last") || 0;
   const snaps = Object.keys(localStorage).filter(x => x.startsWith("tenths.snap.")).sort().reverse();
   const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
   const installHtml = standalone ? "" :
@@ -1174,13 +1164,15 @@ function openSettings() {
         <select id="sWs"><option value="1" ${p.weekStart === 1 ? "selected" : ""}>Monday</option><option value="0" ${p.weekStart === 0 ? "selected" : ""}>Sunday</option></select></div>
       <div class="setrow"><span class="lab">Default currency</span><input id="sCur" value="${esc(p.defaultCurrency)}" maxlength="3" style="width:70px;text-transform:uppercase;"></div>
 
-      <div class="fieldlab">Categories</div>
-      <div id="catMan">${S.categories.map(c => `
+      <details id="catDetails">
+        <summary class="fieldlab">Edit time tracking categories</summary>
+        <div id="catMan">${S.categories.map(c => `
         <div class="catman" data-id="${c.id}" style="--catcol:${catColorVar(c)}">
           <span class="swatch ${catIsTex(c) ? "tex" : ""}"></span>
           <input value="${esc(c.name)}" maxlength="24">
           <button class="del">delete</button>
         </div>`).join("")}</div>
+      </details>
 
       <div class="fieldlab">App</div>
       <button class="btn-secondary" id="sRefresh">Refresh to the latest version</button>
@@ -1195,12 +1187,6 @@ function openSettings() {
       ${snaps.length ? `<div class="fieldlab">Restore an automatic snapshot</div>
         <div class="chips">${snaps.slice(0, 5).map(k => `<button class="chip small snapbtn" data-k="${k}">${k.replace("tenths.snap.", "")}</button>`).join("")}</div>
         <div class="hint">Snapshots are taken automatically on the first open of each day.</div>` : ""}
-
-      <div class="fieldlab">Sync between your devices (optional)</div>
-      <div class="hint" style="margin:0 0 8px;">Create a <b>secret gist</b> at gist.github.com containing a file named <b>tenths.json</b> (content: <span class="mono">{}</span>), plus a fine-grained token with only the Gists permission. Paste both on each device. Friends don't need this — their data lives on their own phone.</div>
-      <input id="sGistId" placeholder="Gist ID" value="${esc(id)}" style="margin-bottom:8px;">
-      <input id="sGistTok" placeholder="GitHub token (stays on this device)" value="${esc(token)}" type="password">
-      <button class="btn-secondary" id="sSync">Sync now${last ? " · last " + new Date(last).toLocaleString() : ""}</button>
 
       <button class="btn-danger" id="sWipe" style="margin-top:20px;">Erase all my data on this device</button>
     </div>`
@@ -1222,7 +1208,9 @@ function openSettings() {
       if (used && !confirm(`"${cat.name}" is used on ${(used * 0.1).toFixed(1)}h of your tape. Deleting clears those blocks. Continue?`)) return;
       Object.values(S.slots).forEach(day => Object.keys(day).forEach(k => { if (day[k] === cat.id) delete day[k]; }));
       S.categories = S.categories.filter(c => c.id !== cat.id);
-      save(); openSettings(); renderAll();
+      save(); openSettings();
+      const dd = $("#catDetails"); if (dd) dd.open = true; // stay expanded while managing
+      renderAll();
     });
   });
   $("#sRefresh").addEventListener("click", async () => {
@@ -1251,9 +1239,6 @@ function openSettings() {
     if (!confirm("Restore your data as it was on " + b.dataset.k.replace("tenths.snap.", "") + "? Current data is replaced.")) return;
     S = JSON.parse(localStorage.getItem(b.dataset.k)); save(); renderAll(); closeSheet(); toast("Snapshot restored");
   }));
-  $("#sGistId").addEventListener("change", () => localStorage.setItem("tenths.gist.id", $("#sGistId").value.trim()));
-  $("#sGistTok").addEventListener("change", () => localStorage.setItem("tenths.gist.token", $("#sGistTok").value.trim()));
-  $("#sSync").addEventListener("click", () => syncNow(false));
   $("#sWipe").addEventListener("click", () => {
     if (!confirm("Erase everything on this device? Export first if you want a copy.")) return;
     Object.keys(localStorage).filter(k => k.startsWith("tenths.")).forEach(k => localStorage.removeItem(k));

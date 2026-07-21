@@ -17,8 +17,8 @@ tracker, and a media-diet overview — per person, with zero accounts.
   resize it. You can also **press and hold a logged block, then drag** to
   stretch it across more of the day.
 - **Money / Media** — each tab is its own logging page: punch in the amount +
-  what for, or the title + type + minutes, right at the top. The time defaults
-  to now and can be adjusted. Tap any logged entry below to edit or delete it.
+  what for, or the title + type, right at the top. The time defaults to now
+  and can be adjusted. Tap any logged entry below to edit or delete it.
 - **Summary** — totals, the week barcode (each day as a colored strip of its 240
   blocks), hours per category in 0.1h units, spend by purpose, media by type.
   "Copy week summary" puts a text digest on the clipboard for the group chat.
@@ -32,8 +32,6 @@ Everything lives in your own browser (localStorage) — nothing is sent anywhere
 - **Back up / move devices**: Settings → *Export / share (JSON)*, then *Import*
   on the other device. A snapshot is also taken automatically on the first open
   of each day (Settings → restore).
-- **Optional device sync**: Settings has an advanced option to sync one person's
-  data between their own phone and desktop via a private gist (see the in-app help).
 - **Preview with fake data**: add `?demo=1` to the URL (nothing is saved).
 
 ## Hosting / development
