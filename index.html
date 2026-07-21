@@ -163,17 +163,17 @@ body.dragging-slot { cursor: ns-resize; }
 .slot .cat { font-size: 14px; font-weight: 600; }
 .slot .empty-rule { color: transparent; font-size: 14px; }
 .slot:active { background: var(--surface-2); }
-.slot.now { background: color-mix(in oklab, var(--danger) 8%, transparent); }
+.slot.now { background: color-mix(in oklab, var(--accent) 8%, transparent); }
 .slot.now::after {
   content: "NOW"; position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
   font-size: 9px; font-weight: 800; letter-spacing: .12em;
-  color: var(--page); background: var(--danger);
+  color: var(--accent-ink); background: var(--accent);
   padding: 3px 8px; border-radius: 999px;
 }
 /* the time-is-here line: strongest horizontal rule on the tape, beats the hour borders */
 .slot.now::before {
   content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px;
-  background: var(--danger); z-index: 2; pointer-events: none;
+  background: var(--accent); z-index: 2; pointer-events: none;
 }
 
 /* ---------- lists (money / media) ---------- */
