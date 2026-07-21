@@ -458,9 +458,9 @@ function nextSlotIdx() {
   return S.categories.length % (PALN * 2);
 }
 
-function toast(msg) {
+function toast(msg, ms) {
   const t = $("#toast"); t.textContent = msg; t.classList.add("show");
-  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 2200);
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), ms || 2200);
 }
 
 /* ============================== header ============================== */
@@ -1051,13 +1051,14 @@ async function exportData() {
   const name = (S.profile.name || "week-tracker").toLowerCase().replace(/\s+/g, "-");
   const fn = `${name}-${dateKey(new Date())}.json`;
   const json = JSON.stringify(S, null, 1);
-  const blob = new Blob([json], { type: "application/json" });
+  /* text/plain, not application/json: iOS won't share JSON files but shares text files fine */
+  const blob = new Blob([json], { type: "text/plain" });
   const clipFallback = async (err) => {
-    try { await navigator.clipboard.writeText(json); toast("Share didn't work — copied your data to the clipboard instead. Paste it into Notes / a message."); }
-    catch (e2) { toast("Export failed: " + ((err && err.name) || "unknown error")); }
+    try { await navigator.clipboard.writeText(json); toast("Sharing isn't supported here — your data was copied to the clipboard instead. Paste it into Notes to keep a backup.", 6000); }
+    catch (e2) { toast("Export failed: " + ((err && err.name) || "unknown error"), 5000); }
   };
-  if (navigator.canShare && navigator.canShare({ files: [new File([blob], fn, { type: "application/json" })] })) {
-    try { await navigator.share({ files: [new File([blob], fn, { type: "application/json" })], title: "Week Tracker data" }); return; }
+  if (navigator.canShare && navigator.canShare({ files: [new File([blob], fn, { type: "text/plain" })] })) {
+    try { await navigator.share({ files: [new File([blob], fn, { type: "text/plain" })], title: "Week Tracker data" }); return; }
     catch (err) {
       if (err && err.name === "AbortError") return; // user closed the share sheet
       await clipFallback(err); return;
@@ -1071,14 +1072,16 @@ async function exportData() {
     toast("Downloaded " + fn);
   } catch (err) { await clipFallback(err); }
 }
+function applyImportText(txt, mode) {
+  let inc = null;
+  try { inc = JSON.parse(txt); } catch (e) {}
+  if (!inc || inc.v !== 1) { toast("That doesn't look like Week Tracker data"); return; }
+  if (mode === "replace") S = inc;
+  else S = mergeStores(S, inc);
+  save(); renderAll(); closeSheet(); toast("Import done");
+}
 function importData(file, mode) {
-  file.text().then(txt => {
-    const inc = JSON.parse(txt);
-    if (!inc || inc.v !== 1) { toast("That doesn't look like a Week Tracker file"); return; }
-    if (mode === "replace") S = inc;
-    else S = mergeStores(S, inc);
-    save(); renderAll(); closeSheet(); toast("Import done");
-  }).catch(() => toast("Couldn't read that file"));
+  file.text().then(txt => applyImportText(txt, mode)).catch(() => toast("Couldn't read that file"));
 }
 function mergeStores(a, b) {
   const out = JSON.parse(JSON.stringify(a));
@@ -1182,6 +1185,7 @@ function openSettings() {
       <div class="fieldlab">Your data</div>
       <button class="btn-secondary" id="sExport">Export / share (JSON)</button>
       <button class="btn-secondary" id="sImportMerge">Import file (merge)</button>
+      <button class="btn-secondary" id="sImportClip">Import from clipboard (merge)</button>
       <button class="btn-secondary" id="sImportReplace">Import file (replace everything)</button>
       <input type="file" id="sFile" accept=".json,application/json" style="display:none;">
       ${snaps.length ? `<div class="fieldlab">Restore an automatic snapshot</div>
@@ -1232,6 +1236,10 @@ function openSettings() {
   });
   $("#sExport").addEventListener("click", exportData);
   let importMode = "merge";
+  $("#sImportClip").addEventListener("click", async () => {
+    try { applyImportText(await navigator.clipboard.readText(), "merge"); }
+    catch (e) { toast("Couldn't read the clipboard"); }
+  });
   $("#sImportMerge").addEventListener("click", () => { importMode = "merge"; $("#sFile").click(); });
   $("#sImportReplace").addEventListener("click", () => { importMode = "replace"; $("#sFile").click(); });
   $("#sFile").addEventListener("change", (e) => { if (e.target.files[0]) importData(e.target.files[0], importMode); });
