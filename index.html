@@ -1171,6 +1171,9 @@ function openSettings() {
           <button class="del">delete</button>
         </div>`).join("")}</div>
 
+      <div class="fieldlab">App</div>
+      <button class="btn-secondary" id="sRefresh">Refresh to the latest version</button>
+      <div class="hint">You're on the build from ${document.lastModified}.</div>
       ${installHtml}
 
       <div class="fieldlab">Your data</div>
@@ -1210,6 +1213,17 @@ function openSettings() {
       S.categories = S.categories.filter(c => c.id !== cat.id);
       save(); openSettings(); renderAll();
     });
+  });
+  $("#sRefresh").addEventListener("click", async () => {
+    toast("Updating…");
+    try {
+      if ("serviceWorker" in navigator) {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg) await reg.update();
+      }
+      await fetch("./", { cache: "reload" }); // repopulates the offline cache via the SW
+    } catch (e) {}
+    location.reload();
   });
   const si = $("#sInstall");
   if (si) si.addEventListener("click", () => {
