@@ -1,6 +1,6 @@
 {
   "name": "Week Tracker — one week, six minutes at a time",
-  "short_name": "Week Tracker",
+  "short_name": "Tracker",
   "description": "Track one week of your life in six-minute increments: time, money, and media.",
   "start_url": "./",
   "scope": "./",
