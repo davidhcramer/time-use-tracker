@@ -1050,15 +1050,16 @@ function copySummary() {
 async function exportData() {
   const name = (S.profile.name || "week-tracker").toLowerCase().replace(/\s+/g, "-");
   const fn = `${name}-${dateKey(new Date())}.json`;
+  /* .txt + text/plain: Android Chrome (and iOS) refuse to share .json files, but .txt is allowlisted */
+  const shareFn = `${name}-${dateKey(new Date())}.txt`;
   const json = JSON.stringify(S, null, 1);
-  /* text/plain, not application/json: iOS won't share JSON files but shares text files fine */
   const blob = new Blob([json], { type: "text/plain" });
   const clipFallback = async (err) => {
     try { await navigator.clipboard.writeText(json); toast("Sharing isn't supported here — your data was copied to the clipboard instead. Paste it into Notes to keep a backup.", 6000); }
     catch (e2) { toast("Export failed: " + ((err && err.name) || "unknown error"), 5000); }
   };
-  if (navigator.canShare && navigator.canShare({ files: [new File([blob], fn, { type: "text/plain" })] })) {
-    try { await navigator.share({ files: [new File([blob], fn, { type: "text/plain" })], title: "Week Tracker data" }); return; }
+  if (navigator.canShare && navigator.canShare({ files: [new File([blob], shareFn, { type: "text/plain" })] })) {
+    try { await navigator.share({ files: [new File([blob], shareFn, { type: "text/plain" })], title: "Week Tracker data" }); return; }
     catch (err) {
       if (err && err.name === "AbortError") return; // user closed the share sheet
       await clipFallback(err); return;
@@ -1187,7 +1188,7 @@ function openSettings() {
       <button class="btn-secondary" id="sImportMerge">Import file (merge)</button>
       <button class="btn-secondary" id="sImportClip">Import from clipboard (merge)</button>
       <button class="btn-secondary" id="sImportReplace">Import file (replace everything)</button>
-      <input type="file" id="sFile" accept=".json,application/json" style="display:none;">
+      <input type="file" id="sFile" accept=".json,.txt,application/json,text/plain" style="display:none;">
       ${snaps.length ? `<div class="fieldlab">Restore an automatic snapshot</div>
         <div class="chips">${snaps.slice(0, 5).map(k => `<button class="chip small snapbtn" data-k="${k}">${k.replace("tenths.snap.", "")}</button>`).join("")}</div>
         <div class="hint">Snapshots are taken automatically on the first open of each day.</div>` : ""}
