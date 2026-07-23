@@ -357,7 +357,7 @@ const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(
 const DEFAULT_CATS = ["Sleep","Personal Care","Work","Commute","Exercise","Housework","Childcare",
   "Looking at Phone","Video Game","Reading","Eating","Preparing Food","Playing with kids",
   "Conversation","Life Admin/Planning","Religious devotion","Shopping"];
-const MEDIA_TYPES = ["Video","TV / film","Social","Podcast","Music","Reading","News","Games","Other"];
+const MEDIA_TYPES = ["Video","TV / film","Social media","Podcast","Audiobook","Music","Reading","Substack/Blog","News","Games","Play","Other"];
 
 function freshStore() {
   return {
@@ -374,6 +374,8 @@ let S;
 try { S = JSON.parse(localStorage.getItem(LSKEY)) || freshStore(); }
 catch (e) { S = freshStore(); }
 if (!S.deleted) S.deleted = [];
+/* 2026-07-23 media-type rename; harmless to re-run */
+(S.media || []).forEach(m => { if (m.type === "Social") m.type = "Social media"; });
 /* one-time top-up to the 2026-07-21 base category list; unused old defaults are dropped */
 if (!S.catsV2) {
   const used = new Set(Object.values(S.slots || {}).flatMap(d => Object.values(d)));
@@ -415,7 +417,7 @@ function demoStore() {
   d.media = [
     { id: "d1", ts: ts(0, 13), up: 1, title: "Morning news roundup", type: "News", minutes: 15 },
     { id: "d2", ts: ts(0, 21), up: 1, title: "The Rest Is History", type: "Podcast", minutes: 55 },
-    { id: "d3", ts: ts(1, 22), up: 1, title: "Instagram scroll", type: "Social", minutes: 25 },
+    { id: "d3", ts: ts(1, 22), up: 1, title: "Instagram scroll", type: "Social media", minutes: 25 },
   ];
   return d;
 }
@@ -448,6 +450,8 @@ const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","
 function slotLabel(i) { return String(Math.floor(i / 10)).padStart(2, "0") + ":" + String((i % 10) * 6).padStart(2, "0"); }
 function nowSlotIndex() { const n = new Date(); return Math.floor((n.getHours() * 60 + n.getMinutes()) / 6); }
 function fmtTime(ts) { const d = new Date(ts); return String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0"); }
+/* day-granularity records (media) live at noon so DST/TZ edges can't shift their day */
+function dayNoonTs(k) { const d = fromKey(k); d.setHours(12, 0, 0, 0); return d.getTime(); }
 
 /* ============================== ui state ============================== */
 let selDate = new Date(); selDate.setHours(0,0,0,0);
@@ -633,13 +637,14 @@ function openSlotSheet(i) {
   const cur = day[slotLabel(i)];
   const isToday = k === dateKey(new Date());
   const canNow = isToday && i <= nowSlotIndex();
-  /* a filled block stands for its whole contiguous run of the same category */
+  /* the contiguous run of the same category, offered as a "whole block" selection */
   let runStart = i, runEnd = i + 1;
   if (cur) {
     while (runStart > 0 && day[slotLabel(runStart - 1)] === cur) runStart--;
     while (runEnd < 240 && day[slotLabel(runEnd)] === cur) runEnd++;
   }
-  let start = runStart, end = runEnd;
+  /* edits default to just the tapped slot; widen via From/To or the whole-block chip */
+  let start = i, end = i + 1;
   const d = selDate;
   const chips = S.categories.map(c =>
     `<button class="chip ${c.id === cur ? "sel" : ""}" data-cat="${c.id}" style="--catcol:${catColorVar(c)}">
@@ -659,12 +664,12 @@ function openSlotSheet(i) {
         <button class="chip small" data-n="10">1 h</button>
         <button class="chip small" data-n="20">2 h</button>
         ${canNow ? `<button class="chip small" data-n="now">→ now</button>` : ""}
+        ${cur && runEnd - runStart > 1 ? `<button class="chip small" data-n="run">Whole block ${slotLabel(runStart)}–${runEnd >= 240 ? "24:00" : slotLabel(runEnd)}</button>` : ""}
       </div>
       <div class="fieldlab">Category</div>
       <div class="chips" id="catChips">${chips}<button class="chip add" id="addCat">+ New</button></div>
       <div id="newCatRow" style="display:none; margin-top:10px;"><div class="row2"><input id="newCatName" placeholder="Category name" maxlength="24"><button class="btn-mini" id="newCatAdd">Add</button></div></div>
-      ${cur ? `<button class="btn-primary" id="applyTimes">Update times</button>
-      <button class="btn-danger" id="clearSlot">Clear this time</button>` : ""}
+      ${cur ? `<button class="btn-danger" id="clearSlot">Clear this time</button>` : ""}
     </div>`
   );
   const updRange = () => {
@@ -672,11 +677,9 @@ function openSlotSheet(i) {
     $("#slotRange").textContent = slotLabel(start) + "–" + (end >= 240 ? "24:00" : slotLabel(end)) + "  (" + ((end - start) * 0.1).toFixed(1) + " h)";
   };
   updRange();
-  /* writes [start,end) as cid; for an existing run, the old run is moved, not duplicated */
+  /* writes [start,end) as cid over whatever is there; slots outside the selection are never touched */
   const applyCat = (cid) => {
     if (!S.slots[k]) S.slots[k] = {};
-    if (cur) for (let s = runStart; s < runEnd; s++)
-      if (S.slots[k][slotLabel(s)] === cur) delete S.slots[k][slotLabel(s)];
     for (let s = start; s < end; s++) S.slots[k][slotLabel(s)] = cid;
     S.slotsMeta[k] = Date.now();
     save(); closeSheet(); renderTape(); renderWeekbar();
@@ -692,10 +695,11 @@ function openSlotSheet(i) {
     updRange();
   });
   $("#fillChips").querySelectorAll(".chip").forEach(b => b.addEventListener("click", () => {
+    if (b.dataset.n === "run") { start = runStart; end = runEnd; updRange(); return; } // selects, then pick a category or Clear
     const n = b.dataset.n === "now" ? (nowSlotIndex() - start + 1) : +b.dataset.n;
     end = Math.max(start + 1, Math.min(start + n, 240));
     updRange();
-    if (cur) applyCat(cur); // on a logged item, duration chips act immediately
+    if (cur) applyCat(cur); // on a logged item, duration chips extend immediately
   }));
   $("#catChips").querySelectorAll("[data-cat]").forEach(b => b.addEventListener("click", () => applyCat(b.dataset.cat)));
   const commitNewCat = () => {
@@ -711,8 +715,6 @@ function openSlotSheet(i) {
   });
   $("#newCatAdd").addEventListener("click", commitNewCat);
   $("#newCatName").addEventListener("keydown", (e) => { if (e.key === "Enter") commitNewCat(); });
-  const ap = $("#applyTimes");
-  if (ap) ap.addEventListener("click", () => applyCat(cur));
   const cl = $("#clearSlot");
   if (cl) cl.addEventListener("click", () => {
     for (let s = start; s < end; s++) delete S.slots[k][slotLabel(s)];
@@ -835,7 +837,7 @@ function openMediaSheet(e) {
       <div class="chips" id="dChips">${MEDIA_TYPES.map(t =>
         `<button class="chip small ${t === e.type ? "sel" : ""}" data-t="${t}">${t}</button>`).join("")}</div>
       <div class="timerow" style="margin-top:14px;">
-        <label>When<input type="time" id="dTime" value="${fmtTime(e.ts)}"></label>
+        <label class="tight" style="flex:0 0 150px;">Day<input type="date" id="dDay" value="${dateKey(d)}"></label>
       </div>
       <button class="btn-primary" id="dSave">Save</button>
       <button class="btn-danger" id="dDel">Delete entry</button>
@@ -852,7 +854,7 @@ function openMediaSheet(e) {
     const title = q("#dTitle").value.trim();
     if (!title) { toast("What did you watch / read / hear?"); return; }
     const rec = {
-      id: e.id, ts: tsWithTime(e.ts, q("#dTime").value), up: Date.now(),
+      id: e.id, ts: dayNoonTs(q("#dDay").value || dateKey(d)), up: Date.now(),
       title, type: selType || "Other",
     };
     const ix = S.media.findIndex(m => m.id === e.id); S.media[ix] = rec;
@@ -865,7 +867,7 @@ function openMediaSheet(e) {
 }
 function renderMedia() {
   const days = weekDates(selDate).map(dateKey);
-  const wk = S.media.filter(m => days.includes(dateKey(new Date(m.ts)))).sort((a, b) => b.ts - a.ts);
+  const wk = S.media.filter(m => days.includes(dateKey(new Date(m.ts)))).sort((a, b) => b.ts - a.ts || (b.up || 0) - (a.up || 0));
   let html = `<section class="card">
     <h2>I just consumed media</h2>
     <input id="dTitle" placeholder="Title (show, video, article, album…)" list="titleList">
@@ -874,7 +876,7 @@ function renderMedia() {
     <div class="chips" id="dChips">${MEDIA_TYPES.map(t =>
       `<button class="chip small" data-t="${t}">${t}</button>`).join("")}</div>
     <div class="timerow" style="margin-top:14px;">
-      <label>When<input type="time" id="dTime" value="${fmtTime(Date.now())}"></label>
+      <label class="tight" style="flex:0 0 150px;">Day<input type="date" id="dDay" value="${dateKey(new Date())}"></label>
     </div>
     <button class="btn-primary" id="dLog">Log it</button>
   </section>`;
@@ -888,7 +890,6 @@ function renderMedia() {
       const d = fromKey(k);
       html += `<div class="day-group"><h3>${DOW[d.getDay()]} ${d.getDate()} ${MON[d.getMonth()]}</h3>` +
         byDay[k].map(m => `<button class="entry" data-id="${m.id}">
-          <span class="when">${fmtTime(m.ts)}</span>
           <span class="what"><span class="p1">${esc(m.title)}</span><span class="p2">${m.type}</span></span>
         </button>`).join("") + "</div>";
     });
@@ -904,7 +905,7 @@ function renderMedia() {
     const title = $("#dTitle").value.trim();
     if (!title) { toast("What did you watch / read / hear?"); return; }
     const rec = {
-      id: uid(), ts: tsWithTime(Date.now(), $("#dTime").value), up: Date.now(),
+      id: uid(), ts: dayNoonTs($("#dDay").value || dateKey(new Date())), up: Date.now(),
       title, type: logType || "Other",
     };
     S.media.push(rec);
@@ -1274,7 +1275,8 @@ function setTab(t) {
   document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === "view-" + t));
   history.replaceState(null, "", "#" + t);
   renderAll();
-  if (t === "track") scrollToNow();
+  /* the tape leaves the page scrolled deep; list views must open at their entry form */
+  if (t === "track") scrollToNow(); else window.scrollTo(0, 0);
 }
 $("#nav").querySelectorAll("button").forEach(b => b.addEventListener("click", () => setTab(b.dataset.tab)));
 function renderAll() {
