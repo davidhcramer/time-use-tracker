@@ -158,9 +158,15 @@ body.dragging-slot { cursor: ns-resize; }
 .slot.filled.tex .rail {
   background: repeating-linear-gradient(45deg, var(--catcol) 0 3px, transparent 3px 6px);
 }
+.slot .rail2 { flex: none; width: 4px; border-radius: 2px; margin: 3px 0 3px 2px; background: transparent; }
+.slot.has2 .rail2 { background: var(--catcol2); }
+.slot.has2.tex2 .rail2 {
+  background: repeating-linear-gradient(45deg, var(--catcol2) 0 3px, transparent 3px 6px);
+}
 .slot .body { flex: 1; padding: 7px 14px 7px 10px; border-top: 1px dashed var(--hairline); }
 .slot:first-child .body { border-top: none; }
 .slot .cat { font-size: 14px; font-weight: 600; }
+.slot .cat2 { font-size: 12px; color: var(--ink-2); font-weight: 500; margin-left: 6px; }
 .slot .empty-rule { color: transparent; font-size: 14px; }
 .slot:active { background: var(--surface-2); }
 .slot.now { background: color-mix(in oklab, var(--accent) 8%, transparent); }
@@ -222,7 +228,9 @@ section.card h2 { font-size: 13px; margin: 0 0 10px; text-transform: uppercase; 
 .barrow .bar { flex: 1; height: 8px; border-radius: 0 4px 4px 0; background: var(--surface-2); position: relative; }
 .barrow .bar i { position: absolute; inset: 0 auto 0 0; border-radius: 0 4px 4px 0; background: var(--catcol); }
 .barrow .bar i.tex { background: repeating-linear-gradient(45deg, var(--catcol) 0 3px, color-mix(in oklab, var(--catcol) 35%, var(--surface)) 3px 6px); }
+.barrow .bar i.sec { opacity: .45; }
 .barrow .vv { flex: none; width: 52px; text-align: right; font-size: 12px; font-family: "Spline Sans Mono", ui-monospace, monospace; color: var(--ink-2); }
+.barrow .vv .v2 { display: block; font-size: 10px; opacity: .65; }
 .btn-secondary {
   display: block; width: 100%; text-align: center; padding: 12px;
   border: 1px solid var(--hairline); border-radius: 12px; background: var(--surface);
@@ -364,7 +372,7 @@ function freshStore() {
     v: 1,
     profile: { name: "", theme: "auto", weekStart: 1, currencies: ["USD","EUR","GBP"], defaultCurrency: "USD" },
     categories: DEFAULT_CATS.map((n, i) => ({ id: "c" + i, name: n, slot: i })),
-    slots: {}, slotsMeta: {},
+    slots: {}, slots2: {}, slotsMeta: {},
     money: [], media: [], deleted: [],
     meta: { updatedAt: Date.now() },
   };
@@ -374,6 +382,7 @@ let S;
 try { S = JSON.parse(localStorage.getItem(LSKEY)) || freshStore(); }
 catch (e) { S = freshStore(); }
 if (!S.deleted) S.deleted = [];
+if (!S.slots2) S.slots2 = {}; // secondary "also doing" layer, added 2026-07-23
 /* 2026-07-23 media-type rename; harmless to re-run */
 (S.media || []).forEach(m => { if (m.type === "Social") m.type = "Social media"; });
 /* one-time top-up to the 2026-07-21 base category list; unused old defaults are dropped */
@@ -401,12 +410,15 @@ function demoStore() {
   const today = new Date(); today.setHours(0,0,0,0);
   for (let back = 0; back < 3; back++) {
     const k = (function(x){ return x.getFullYear()+"-"+String(x.getMonth()+1).padStart(2,"0")+"-"+String(x.getDate()).padStart(2,"0"); })(new Date(today.getFullYear(), today.getMonth(), today.getDate() - back));
-    const day = {};
-    const put = (from, to, c) => { for (let i = from; i < to; i++) day[String(Math.floor(i/10)).padStart(2,"0")+":"+String((i%10)*6).padStart(2,"0")] = c; };
+    const day = {}, day2 = {};
+    const lb = (i) => String(Math.floor(i/10)).padStart(2,"0")+":"+String((i%10)*6).padStart(2,"0");
+    const put = (from, to, c) => { for (let i = from; i < to; i++) day[lb(i)] = c; };
+    const put2 = (from, to, c) => { for (let i = from; i < to; i++) day2[lb(i)] = c; };
     put(0, 70, cat("Sleep")); put(70, 80, cat("Eating")); put(80, 90, cat("Commute"));
     put(90, 170, cat("Work")); put(170, 185, cat("Playing with kids")); put(185, 200, cat("Video Game"));
     put(200, 225, cat("Conversation")); put(230, 240, cat("Sleep"));
-    d.slots[k] = day; d.slotsMeta[k] = Date.now();
+    put2(70, 80, cat("Conversation")); put2(80, 90, cat("Reading"));
+    d.slots[k] = day; d.slots2[k] = day2; d.slotsMeta[k] = Date.now();
   }
   const ts = (back, h) => new Date(today.getFullYear(), today.getMonth(), today.getDate() - back, h, 12).getTime();
   d.money = [
@@ -492,9 +504,15 @@ $("#wkPrev").addEventListener("click", () => { selDate = addDays(selDate, -7); r
 $("#wkNext").addEventListener("click", () => { selDate = addDays(selDate, 7); renderAll(); });
 
 /* ============================== tape ============================== */
+function slotBodyHtml(cat, cat2) {
+  return cat
+    ? `<span class="cat">${esc(cat.name)}</span>${cat2 ? `<span class="cat2">+ ${esc(cat2.name)}</span>` : ""}`
+    : `<span class="empty-rule">·</span>`;
+}
 function renderTape() {
   const k = dateKey(selDate);
   const day = S.slots[k] || {};
+  const day2 = S.slots2[k] || {};
   const isToday = k === dateKey(new Date());
   const nowI = nowSlotIndex();
   let html = "";
@@ -505,13 +523,17 @@ function renderTape() {
       const lab = slotLabel(i);
       const cid = day[lab];
       const cat = cid ? catById(cid) : null;
+      const cat2 = cat && day2[lab] ? catById(day2[lab]) : null;
       const cls = ["slot"];
       if (cat) { cls.push("filled"); if (catIsTex(cat)) cls.push("tex"); }
+      if (cat2) { cls.push("has2"); if (catIsTex(cat2)) cls.push("tex2"); }
       if (isToday && i === nowI) cls.push("now");
-      html += `<button class="${cls.join(" ")}" data-i="${i}" ${cat ? `style="--catcol:${catColorVar(cat)}"` : ""}>
+      const vars = (cat ? `--catcol:${catColorVar(cat)};` : "") + (cat2 ? `--catcol2:${catColorVar(cat2)};` : "");
+      html += `<button class="${cls.join(" ")}" data-i="${i}" ${vars ? `style="${vars}"` : ""}>
         <span class="t">${j === 0 ? "<b>" + lab + "</b>" : lab}</span>
         <span class="rail"></span>
-        <span class="body">${cat ? `<span class="cat">${esc(cat.name)}</span>` : `<span class="empty-rule">·</span>`}</span>
+        <span class="rail2"></span>
+        <span class="body">${slotBodyHtml(cat, cat2)}</span>
       </button>`;
     }
     html += "</div>";
@@ -534,22 +556,28 @@ function slotElAt(x, y) {
   return s && $("#tape").contains(s) ? s : null;
 }
 function paintDragPreview() {
-  const day = S.slots[dateKey(selDate)] || {};
+  const k = dateKey(selDate);
+  const day = S.slots[k] || {}, day2 = S.slots2[k] || {};
   const lo = Math.min(drag.from, drag.to), hi = Math.max(drag.from, drag.to);
   $("#tape").querySelectorAll(".slot").forEach(el => {
     const i = +el.dataset.i;
     const inR = i >= lo && i <= hi;
     const cid = inR ? drag.cid : day[slotLabel(i)];
+    const cid2 = inR ? drag.cid2 : day2[slotLabel(i)];
     const c = cid ? catById(cid) : null;
+    const c2 = c && cid2 ? catById(cid2) : null;
     el.classList.toggle("filled", !!c);
     el.classList.toggle("tex", !!c && catIsTex(c));
+    el.classList.toggle("has2", !!c2);
+    el.classList.toggle("tex2", !!c2 && catIsTex(c2));
     el.classList.toggle("preview", inR);
     if (c) el.style.setProperty("--catcol", catColorVar(c)); else el.style.removeProperty("--catcol");
-    el.querySelector(".body").innerHTML = c ? `<span class="cat">${esc(c.name)}</span>` : `<span class="empty-rule">·</span>`;
+    if (c2) el.style.setProperty("--catcol2", catColorVar(c2)); else el.style.removeProperty("--catcol2");
+    el.querySelector(".body").innerHTML = slotBodyHtml(c, c2);
   });
 }
-function startSlotDrag(i, cid, x, y) {
-  drag = { from: i, to: i, cid, lastX: x, lastY: y };
+function startSlotDrag(i, cid, cid2, x, y) {
+  drag = { from: i, to: i, cid, cid2, lastX: x, lastY: y };
   document.body.classList.add("dragging-slot");
   if (navigator.vibrate) navigator.vibrate(10);
   paintDragPreview();
@@ -563,18 +591,20 @@ $("#tape").addEventListener("pointerdown", (e) => {
   const el = slotElAt(e.clientX, e.clientY);
   if (!el) return;
   const i = +el.dataset.i;
-  const cid = (S.slots[dateKey(selDate)] || {})[slotLabel(i)];
+  const k = dateKey(selDate);
+  const cid = (S.slots[k] || {})[slotLabel(i)];
   if (!cid) return;
-  const pd = { i, cid, x: e.clientX, y: e.clientY, mouse: e.pointerType === "mouse" };
+  const cid2 = (S.slots2[k] || {})[slotLabel(i)];
+  const pd = { i, cid, cid2, x: e.clientX, y: e.clientY, mouse: e.pointerType === "mouse" };
   pendingDrag = pd;
   if (!pd.mouse) pd.timer = setTimeout(() => {
-    if (pendingDrag === pd) { startSlotDrag(pd.i, pd.cid, pd.x, pd.y); pendingDrag = null; }
+    if (pendingDrag === pd) { startSlotDrag(pd.i, pd.cid, pd.cid2, pd.x, pd.y); pendingDrag = null; }
   }, 300);
 });
 window.addEventListener("pointermove", (e) => {
   if (pendingDrag) {
     const dx = Math.abs(e.clientX - pendingDrag.x), dy = Math.abs(e.clientY - pendingDrag.y);
-    if (pendingDrag.mouse && (dx > 6 || dy > 6)) { startSlotDrag(pendingDrag.i, pendingDrag.cid, e.clientX, e.clientY); pendingDrag = null; }
+    if (pendingDrag.mouse && (dx > 6 || dy > 6)) { startSlotDrag(pendingDrag.i, pendingDrag.cid, pendingDrag.cid2, e.clientX, e.clientY); pendingDrag = null; }
     else if (!pendingDrag.mouse && (dx > 10 || dy > 10)) { clearTimeout(pendingDrag.timer); pendingDrag = null; } // it's a scroll
   }
   if (drag) dragMoveTo(e.clientX, e.clientY);
@@ -588,7 +618,12 @@ window.addEventListener("pointerup", () => {
   const k = dateKey(selDate);
   const lo = Math.min(drag.from, drag.to), hi = Math.max(drag.from, drag.to);
   if (!S.slots[k]) S.slots[k] = {};
-  for (let s = lo; s <= hi; s++) S.slots[k][slotLabel(s)] = drag.cid;
+  if (!S.slots2[k]) S.slots2[k] = {};
+  for (let s = lo; s <= hi; s++) {
+    S.slots[k][slotLabel(s)] = drag.cid;
+    if (drag.cid2) S.slots2[k][slotLabel(s)] = drag.cid2;
+    else delete S.slots2[k][slotLabel(s)];
+  }
   S.slotsMeta[k] = Date.now();
   drag = null; document.body.classList.remove("dragging-slot");
   suppressClick = true; setTimeout(() => { suppressClick = false; }, 350);
@@ -635,6 +670,7 @@ function openSlotSheet(i) {
   const k = dateKey(selDate);
   const day = S.slots[k] || {};
   const cur = day[slotLabel(i)];
+  const cur2 = cur ? (S.slots2[k] || {})[slotLabel(i)] : undefined;
   const isToday = k === dateKey(new Date());
   const canNow = isToday && i <= nowSlotIndex();
   /* the contiguous run of the same category, offered as a "whole block" selection */
@@ -669,6 +705,14 @@ function openSlotSheet(i) {
       <div class="fieldlab">Category</div>
       <div class="chips" id="catChips">${chips}<button class="chip add" id="addCat">+ New</button></div>
       <div id="newCatRow" style="display:none; margin-top:10px;"><div class="row2"><input id="newCatName" placeholder="Category name" maxlength="24"><button class="btn-mini" id="newCatAdd">Add</button></div></div>
+      <details ${cur2 ? "open" : ""}>
+        <summary class="fieldlab">Also doing (optional)</summary>
+        <div class="chips" id="cat2Chips" style="margin-top:6px;">
+          <button class="chip small ${!cur2 ? "sel" : ""}" data-cat2="">None</button>
+          ${S.categories.map(c => `<button class="chip small ${c.id === cur2 ? "sel" : ""}" data-cat2="${c.id}" style="--catcol:${catColorVar(c)}">
+            <span class="swatch ${catIsTex(c) ? "tex" : ""}"></span>${esc(c.name)}</button>`).join("")}
+        </div>
+      </details>
       ${cur ? `<button class="btn-danger" id="clearSlot">Clear this time</button>` : ""}
     </div>`
   );
@@ -677,10 +721,24 @@ function openSlotSheet(i) {
     $("#slotRange").textContent = slotLabel(start) + "–" + (end >= 240 ? "24:00" : slotLabel(end)) + "  (" + ((end - start) * 0.1).toFixed(1) + " h)";
   };
   updRange();
-  /* writes [start,end) as cid over whatever is there; slots outside the selection are never touched */
+  let sel2 = cur2 || "";
+  const writeSecondary = () => {
+    if (!S.slots2[k]) S.slots2[k] = {};
+    for (let s = start; s < end; s++) {
+      if (sel2) S.slots2[k][slotLabel(s)] = sel2;
+      else delete S.slots2[k][slotLabel(s)];
+    }
+  };
+  /* writes [start,end) as cid over whatever is there; slots outside the selection are never touched.
+     Secondary is written only if this visit changed it (or it collides with the new primary),
+     so mixed also-doing values inside a wider selection survive a plain recolor. */
   const applyCat = (cid) => {
     if (!S.slots[k]) S.slots[k] = {};
     for (let s = start; s < end; s++) S.slots[k][slotLabel(s)] = cid;
+    if (sel2 !== (cur2 || "") || sel2 === cid) {
+      if (sel2 === cid) sel2 = "";
+      writeSecondary();
+    }
     S.slotsMeta[k] = Date.now();
     save(); closeSheet(); renderTape(); renderWeekbar();
   };
@@ -702,6 +760,16 @@ function openSlotSheet(i) {
     if (cur) applyCat(cur); // on a logged item, duration chips extend immediately
   }));
   $("#catChips").querySelectorAll("[data-cat]").forEach(b => b.addEventListener("click", () => applyCat(b.dataset.cat)));
+  $("#cat2Chips").querySelectorAll("[data-cat2]").forEach(b => b.addEventListener("click", () => {
+    if (b.dataset.cat2 && b.dataset.cat2 === cur) { toast("That's already the main activity"); return; }
+    sel2 = b.dataset.cat2;
+    $("#cat2Chips").querySelectorAll(".chip").forEach(x => x.classList.toggle("sel", x === b));
+    if (cur) { // on a logged block, also-doing applies immediately; on an empty one it rides along with the category tap
+      writeSecondary();
+      S.slotsMeta[k] = Date.now();
+      save(); closeSheet(); renderTape(); renderWeekbar();
+    }
+  }));
   const commitNewCat = () => {
     const inp = $("#newCatName");
     if (!inp.value.trim()) { inp.focus(); return; }
@@ -717,7 +785,10 @@ function openSlotSheet(i) {
   $("#newCatName").addEventListener("keydown", (e) => { if (e.key === "Enter") commitNewCat(); });
   const cl = $("#clearSlot");
   if (cl) cl.addEventListener("click", () => {
-    for (let s = start; s < end; s++) delete S.slots[k][slotLabel(s)];
+    for (let s = start; s < end; s++) {
+      delete S.slots[k][slotLabel(s)];
+      if (S.slots2[k]) delete S.slots2[k][slotLabel(s)];
+    }
     S.slotsMeta[k] = Date.now();
     save(); closeSheet(); renderTape(); renderWeekbar();
   });
@@ -918,18 +989,20 @@ function renderMedia() {
 /* ============================== week summary ============================== */
 function weekStats() {
   const days = weekDates(selDate).map(dateKey);
-  const catH = {};
+  const catH = {}, cat2H = {};
   let filled = 0;
   days.forEach(k => {
     const day = S.slots[k] || {};
     Object.values(day).forEach(cid => { catH[cid] = (catH[cid] || 0) + 0.1; filled++; });
+    /* secondary counts only where a primary exists, so also-doing hours can't exceed tracked hours */
+    Object.entries(S.slots2[k] || {}).forEach(([lab, cid]) => { if (day[lab]) cat2H[cid] = (cat2H[cid] || 0) + 0.1; });
   });
   const money = S.money.filter(m => days.includes(dateKey(new Date(m.ts))));
   const media = S.media.filter(m => days.includes(dateKey(new Date(m.ts))));
-  return { days, catH, filled, money, media };
+  return { days, catH, cat2H, filled, money, media };
 }
 function renderWeek() {
-  const { days, catH, filled, money, media } = weekStats();
+  const { days, catH, cat2H, filled, money, media } = weekStats();
   const start = fromKey(days[0]), end = fromKey(days[6]);
   const spend = {};
   money.forEach(m => spend[m.currency] = (spend[m.currency] || 0) + m.amount);
@@ -949,16 +1022,23 @@ function renderWeek() {
       `<span style="--catcol:${catColorVar(c)}"><span class="swatch ${catIsTex(c) ? "tex" : ""}"></span>${esc(c.name)}</span>`).join("") || '<span>Nothing tracked yet this week.</span>'}</div>
   </section>`;
 
-  /* time by category */
-  if (usedCats.length) {
-    const maxH = Math.max(...usedCats.map(c => catH[c.id]));
+  /* time by category: solid = primary, faded = also-doing (kept apart so primary sums to the week) */
+  const barCats = S.categories.filter(c => catH[c.id] || cat2H[c.id]);
+  if (barCats.length) {
+    const maxH = Math.max(...barCats.map(c => (catH[c.id] || 0) + (cat2H[c.id] || 0)));
+    const anySec = barCats.some(c => cat2H[c.id]);
     html += `<section class="card"><h2>Time by category</h2>` +
-      usedCats.sort((a, b) => catH[b.id] - catH[a.id]).map(c => `
+      barCats.sort((a, b) => (catH[b.id] || 0) - (catH[a.id] || 0) || (cat2H[b.id] || 0) - (cat2H[a.id] || 0)).map(c => {
+        const p = catH[c.id] || 0, s = cat2H[c.id] || 0;
+        const pw = p ? Math.max(2, p / maxH * 100) : 0;
+        return `
         <div class="barrow" style="--catcol:${catColorVar(c)}">
           <span class="nm"><span class="swatch ${catIsTex(c) ? "tex" : ""}"></span><em>${esc(c.name)}</em></span>
-          <span class="bar"><i class="${catIsTex(c) ? "tex" : ""}" style="width:${Math.max(2, catH[c.id] / maxH * 100)}%"></i></span>
-          <span class="vv">${catH[c.id].toFixed(1)}h</span>
-        </div>`).join("") + `</section>`;
+          <span class="bar">${p ? `<i class="${catIsTex(c) ? "tex" : ""}" style="width:${pw}%"></i>` : ""}${s ? `<i class="sec" style="left:${pw}%; width:${Math.max(2, s / maxH * 100)}%"></i>` : ""}</span>
+          <span class="vv">${p.toFixed(1)}h${s ? `<span class="v2">+${s.toFixed(1)}</span>` : ""}</span>
+        </div>`;
+      }).join("") +
+      (anySec ? `<div class="hint">Faded = logged as "also doing" alongside another activity.</div>` : "") + `</section>`;
   }
 
   /* spend by purpose */
@@ -1086,6 +1166,7 @@ function applyImportText(txt, mode) {
   if (!inc || inc.v !== 1) { toast("That doesn't look like Week Tracker data"); return; }
   if (mode === "replace") S = inc;
   else S = mergeStores(S, inc);
+  if (!S.slots2) S.slots2 = {}; // pre-2026-07-23 exports have no secondary layer
   save(); renderAll(); closeSheet(); toast("Import done");
 }
 function importData(file, mode) {
@@ -1093,11 +1174,14 @@ function importData(file, mode) {
 }
 function mergeStores(a, b) {
   const out = JSON.parse(JSON.stringify(a));
+  if (!out.slots2) out.slots2 = {};
   out.deleted = [...new Set([...(a.deleted || []), ...(b.deleted || [])])];
   (b.categories || []).forEach(c => { if (!out.categories.some(x => x.id === c.id)) out.categories.push(c); });
   Object.keys(b.slots || {}).forEach(k => {
     if (!out.slots[k] || (b.slotsMeta?.[k] || 0) > (out.slotsMeta?.[k] || 0)) {
       out.slots[k] = b.slots[k]; out.slotsMeta[k] = b.slotsMeta?.[k] || Date.now();
+      /* slots2 rides on the same per-day freshness as slots */
+      if (b.slots2?.[k]) out.slots2[k] = b.slots2[k]; else delete out.slots2[k];
     }
   });
   ["money", "media"].forEach(key => {
@@ -1216,9 +1300,10 @@ function openSettings() {
       const v = e.target.value.trim(); if (v) { cat.name = v; save(); renderAll(); }
     });
     row.querySelector(".del").addEventListener("click", () => {
-      const used = Object.values(S.slots).reduce((n, day) => n + Object.values(day).filter(x => x === cat.id).length, 0);
+      const count = (map) => Object.values(map).reduce((n, day) => n + Object.values(day).filter(x => x === cat.id).length, 0);
+      const used = count(S.slots) + count(S.slots2);
       if (used && !confirm(`"${cat.name}" is used on ${(used * 0.1).toFixed(1)}h of your tape. Deleting clears those blocks. Continue?`)) return;
-      Object.values(S.slots).forEach(day => Object.keys(day).forEach(k => { if (day[k] === cat.id) delete day[k]; }));
+      [S.slots, S.slots2].forEach(map => Object.values(map).forEach(day => Object.keys(day).forEach(k => { if (day[k] === cat.id) delete day[k]; })));
       S.categories = S.categories.filter(c => c.id !== cat.id);
       save(); openSettings();
       const dd = $("#catDetails"); if (dd) dd.open = true; // stay expanded while managing
@@ -1253,7 +1338,9 @@ function openSettings() {
   $("#sFile").addEventListener("change", (e) => { if (e.target.files[0]) importData(e.target.files[0], importMode); });
   document.querySelectorAll(".snapbtn").forEach(b => b.addEventListener("click", () => {
     if (!confirm("Restore your data as it was on " + b.dataset.k.replace("tenths.snap.", "") + "? Current data is replaced.")) return;
-    S = JSON.parse(localStorage.getItem(b.dataset.k)); save(); renderAll(); closeSheet(); toast("Snapshot restored");
+    S = JSON.parse(localStorage.getItem(b.dataset.k));
+    if (!S.slots2) S.slots2 = {}; // pre-2026-07-23 snapshots have no secondary layer
+    save(); renderAll(); closeSheet(); toast("Snapshot restored");
   }));
   $("#sWipe").addEventListener("click", () => {
     if (!confirm("Erase everything on this device? Export first if you want a copy.")) return;
